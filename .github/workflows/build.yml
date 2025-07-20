@@ -35,24 +35,26 @@ jobs:
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
 
-      - name: Checkout dev-doc branch
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository }}
-          ref: dev-doc
-          path: history
-
-      - name: Run function tracker
+      - name: Run function tracker and save to temp folder
         run: |
+          mkdir -p temp-csv
           python3 scripts/update_function_history.py \
             app/build/dokka/html/navigation.html \
             $GITHUB_SHA \
             "$(date -u +%Y%m%d)" \
-            history
+            temp-csv
 
-      - name: Commit changes to dev-doc
+      - name: Checkout dev-doc branch (this overwrites workspace)
+        uses: actions/checkout@v4
+        with:
+          ref: dev-doc
+
+      - name: Copy updated CSVs into dev-doc branch root
         run: |
-          cd history
+          cp ../temp-csv/*.csv .
+
+      - name: Commit updated function history
+        run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add dev_function_history.csv
