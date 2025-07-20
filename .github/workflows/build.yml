@@ -1,7 +1,14 @@
 name: Android Build & Dokka Docs
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - '**'  # All branches
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:  # Manual trigger from GitHub UI
+
 jobs:
   build:
     name: Build and Generate Dokka Docs
@@ -20,4 +27,14 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build project
+      - name: Build the project
+        run: ./gradlew build
+
+      - name: Generate Dokka documentation
+        run: ./gradlew dokkaHtml
+
+      - name: Upload build/ as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: build/
