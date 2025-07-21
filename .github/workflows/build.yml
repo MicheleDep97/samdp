@@ -35,29 +35,35 @@ jobs:
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
 
-      - name: Run function tracker and save to temp folder
+      - name: Extract function-level changes
+        id: extract_functions
         run: |
-          mkdir -p temp-csv
-          python3 scripts/update_function_history.py \
-            app/build/dokka/html/navigation.html \
-            $GITHUB_SHA \
-            "$(date -u +%Y%m%d)" \
-            temp-csv
+          COMMIT_SHA=$(git rev-parse HEAD)
+          COMMIT_DATE=$(git show -s --format=%ci $COMMIT_SHA)
+          OUTPUT="function_change_log.md"
 
-      - name: Checkout dev-doc branch (this overwrites workspace)
-        uses: actions/checkout@v4
+          echo "| Function Name | Status | Commit SHA | Date |" > $OUTPUT
+          echo "|---------------|--------|------------|------|" >> $OUTPUT
+
+          # Get diff between HEAD and previous commit
+          git diff HEAD~1 HEAD -- '*.kt' '*.java' > changes.diff || true
+
+          # Grep added, deleted, or changed function definitions (basic heuristic)
+          grep -E '^[+-].*(fun |void |public |private |protected).*?\(.*?\)' changes.diff | while read -r line; do
+            FUNC_LINE=$(echo "$line" | sed -E 's/^[+-]//' | sed -E 's/\s+/ /g')
+            FUNC_NAME=$(echo "$FUNC_LINE" | sed -E 's/.*(fun|void)\s+([a-zA-Z0-9_]+).*/\2/')
+
+            if [[ "$line" == +* ]]; then
+              STATUS="new"
+            elif [[ "$line" == -* ]]; then
+              STATUS="deleted"
+            fi
+
+            echo "| $FUNC_NAME | $STATUS | $COMMIT_SHA | $COMMIT_DATE |" >> $OUTPUT
+          done
+
+      - name: Upload function log artifact
+        uses: actions/upload-artifact@v4
         with:
-          ref: dev-doc
-
-      - name: Copy updated CSVs into dev-doc branch root
-        run: |
-          cp ../temp-csv/*.csv .
-
-      - name: Commit updated function history
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add dev_function_history.csv
-          git add dev_function_history_*.csv
-          git commit -m "Track new functions from $GITHUB_SHA" || echo "No changes"
-          git push origin dev-doc
+          name: function-change-log-${{ github.sha }}
+          path: function_change_log.md
