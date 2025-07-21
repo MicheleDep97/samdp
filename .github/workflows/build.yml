@@ -15,7 +15,8 @@ jobs:
       - name: Checkout dev branch
         uses: actions/checkout@v4
         with:
-          ref: dev
+            ref: dev
+            fetch-depth: 2 
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -42,25 +43,46 @@ jobs:
           COMMIT_DATE=$(git show -s --format=%ci $COMMIT_SHA)
           OUTPUT="function_change_log.md"
 
-          echo "| Function Name | Status | Commit SHA | Date |" > $OUTPUT
-          echo "|---------------|--------|------------|------|" >> $OUTPUT
+          echo "| Function Name | Status   | Commit SHA | Date |" > $OUTPUT
+          echo "|---------------|----------|------------|------|" >> $OUTPUT
 
-          # Get diff between HEAD and previous commit
+          # Get diff between last two commits (fetch-depth: 2 must be set above)
+          git log --oneline -2
           git diff HEAD~1 HEAD -- '*.kt' '*.java' > changes.diff || true
 
-          # Grep added, deleted, or changed function definitions (basic heuristic)
-          grep -E '^[+-].*(fun |void |public |private |protected).*?\(.*?\)' changes.diff | while read -r line; do
-            FUNC_LINE=$(echo "$line" | sed -E 's/^[+-]//' | sed -E 's/\s+/ /g')
-            FUNC_NAME=$(echo "$FUNC_LINE" | sed -E 's/.*(fun|void)\s+([a-zA-Z0-9_]+).*/\2/')
+          echo "==== Git diff ===="
+          cat changes.diff || echo "No diff"
 
-            if [[ "$line" == +* ]]; then
-              STATUS="new"
-            elif [[ "$line" == -* ]]; then
-              STATUS="deleted"
-            fi
+          # Extract + and - lines that may define functions
+          grep -E '^[+-].*(fun |void |public |private |protected).*?\(.*?\)' changes.diff > raw_funcs.diff || true
 
-            echo "| $FUNC_NAME | $STATUS | $COMMIT_SHA | $COMMIT_DATE |" >> $OUTPUT
-          done
+          # Parse function names and categorize them
+          awk -v sha="$COMMIT_SHA" -v date="$COMMIT_DATE" '
+            function extract_name(line) {
+              match(line, /(fun|void)[ \t]+([a-zA-Z0-9_]+)/, arr)
+              return arr[2]
+            }
+            /^-/ { old_funcs[extract_name($0)] = 1 }
+            /^+/ { new_funcs[extract_name($0)] = 1 }
+            END {
+              for (f in new_funcs) {
+                if (f in old_funcs) {
+                  status = "updated"
+                } else {
+                  status = "new"
+                }
+                printf("| %s | %s | %s | %s |\n", f, status, sha, date)
+              }
+              for (f in old_funcs) {
+                if (!(f in new_funcs)) {
+                  printf("| %s | deleted | %s | %s |\n", f, sha, date)
+                }
+              }
+            }
+          ' raw_funcs.diff >> $OUTPUT
+
+           echo "==== Raw functions ===="
+           cat raw_funcs.diff || echo "No functions found"
 
       - name: Upload function log artifact
         uses: actions/upload-artifact@v4
