@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
 fun Greeting(name: String, modifier: Modifier = Modifier) {
     Surface(color = Color.Cyan) {
         Text(
-            text = "Hello, this is an example of $name app",
+            text = "This is an example of $name app",
             modifier = modifier.padding(24.dp)
         )
     }
