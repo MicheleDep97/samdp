@@ -9,9 +9,6 @@ plugins {
 
 tasks.register<DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
-
-    // Attiva plugin JSON di Dokka
-    pluginsMapConfiguration.put("org.jetbrains.dokka.json.JsonFormatPlugin", emptyMap())
 }
 
 
@@ -68,4 +65,5 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    dokkaPlugin("org.jetbrains.dokka:json-format:1.9.10")
 }
