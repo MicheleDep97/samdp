@@ -34,7 +34,7 @@ jobs:
         run: ./gradlew :app:dokkaHtml
 
       - name: Generate Dokka JSON
-         run: ls -R app/build/dokka/json || echo "No JSON files generated"
+        run: ls -R app/build/dokka/json || echo "No JSON files generated"
 
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
