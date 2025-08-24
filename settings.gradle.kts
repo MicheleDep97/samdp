@@ -9,6 +9,8 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        // 🔹 Aggiunta: Dokka repository
+        maven("https://maven.pkg.jetbrains.space/public/p/dokka/maven")
     }
 }
 dependencyResolutionManagement {
@@ -16,8 +18,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 🔹 Aggiunta: Dokka repository
+        maven("https://maven.pkg.jetbrains.space/public/p/dokka/maven")
     }
 }
 
 rootProject.name = "Example_app"
 include(":app")
+
