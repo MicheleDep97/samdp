@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("org.jetbrains.dokka") version "1.9.10"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
 
 
