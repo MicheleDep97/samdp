@@ -33,6 +33,9 @@ jobs:
       - name: Generate Dokka docs
         run: ./gradlew dokkaHtml
 
+      - name: Generate Dokka JSON
+        run: ./gradlew dokkaJson
+
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
 
