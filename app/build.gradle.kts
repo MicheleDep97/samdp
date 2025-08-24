@@ -10,12 +10,10 @@ plugins {
 tasks.register<DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
 
-    pluginsMapConfiguration.set(
-        mapOf<String, Map<String, String>>(
-            "org.jetbrains.dokka.json.JsonFormatPlugin" to emptyMap()
-        )
-    )
+    // Attiva plugin JSON di Dokka
+    pluginsMapConfiguration.put("org.jetbrains.dokka.json.JsonFormatPlugin", emptyMap())
 }
+
 
 android {
     namespace = "com.example.example_app"
