@@ -1,4 +1,4 @@
-import org.jetbrains.dokka.gradle.DokkaJsonTask
+import org.jetbrains.dokka.gradle.DokkaTask
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,9 +7,15 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.10"
 }
 
-tasks.register<DokkaJsonTask>("dokkaJson") {
+tasks.register<DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
+    pluginsMapConfiguration.set(
+        mapOf(
+            "org.jetbrains.dokka.json.JsonFormatPlugin" to emptyMap<String, String>()
+        )
+    )
 }
+
 
 android {
     namespace = "com.example.example_app"
