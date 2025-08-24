@@ -5,14 +5,9 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.10"
 }
 
-// Definiamo un task custom per generare JSON
 tasks.register<org.jetbrains.dokka.gradle.DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
-    pluginsMapConfiguration.set(
-        mapOf(
-            "org.jetbrains.dokka.json.JsonFormatPlugin" to mapOf<String, String>()
-        )
-    )
+    outputFormat.set("json")
 }
 
 android {
