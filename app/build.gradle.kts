@@ -5,6 +5,11 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.10"
 }
 
+tasks.register<org.jetbrains.dokka.gradle.DokkaTask>("dokkaJson") {
+    outputDirectory.set(buildDir.resolve("dokka/json"))
+    outputFormat.set("json")
+}
+
 android {
     namespace = "com.example.example_app"
     compileSdk = 36
