@@ -4,13 +4,16 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("org.jetbrains.dokka") version "1.9.10"
 }
 
 tasks.register<DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
+    pluginsMapConfiguration.set(
+        mapOf(
+            "org.jetbrains.dokka.json.JsonFormatPlugin" to mapOf<String, String>()
+        )
+    )
 }
-
 
 android {
     namespace = "com.example.example_app"
