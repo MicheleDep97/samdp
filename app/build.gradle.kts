@@ -7,7 +7,6 @@ plugins {
 
 tasks.register<org.jetbrains.dokka.gradle.DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
-    outputFormat.set("json")
 }
 
 android {
