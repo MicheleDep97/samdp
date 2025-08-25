@@ -44,9 +44,6 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun newTestFunction(x: Int): Int {
-    return x * 2
-}
 
 
 @Preview
