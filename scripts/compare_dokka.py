@@ -52,70 +52,50 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
     # 1) <code>
     for code in soup.find_all("code"):
         txt = code.get_text(" ", strip=True)
-        if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ")):
+        if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
             candidates.append(txt)
 
     # 2) <pre>
     if not candidates:
         for pre in soup.find_all("pre"):
             txt = pre.get_text(" ", strip=True)
-            if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ")):
+            if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
                 candidates.append(txt)
 
-    # 3) Dokka temi recenti: <div class="symbol">, <div class="signature">, <span class="signature">
+    # 3) Dokka temi recenti
     if not candidates:
         for el in soup.select("div.symbol, div.signature, span.signature"):
             txt = el.get_text(" ", strip=True)
-            if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ")):
+            if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
                 candidates.append(txt)
 
-    # 4) fallback grezzo: ultima spiaggia
+    # 4) fallback grezzo
     if not candidates:
         body_txt = soup.get_text(" ", strip=True)
-        for m in re.finditer(r"\b(fun|class|interface|enum class|val|var)\s+[A-Za-z_][A-Za-z0-9_]*", body_txt):
+        for m in re.finditer(r"\b(fun|class|interface|enum class|object|val|var)\s+[A-Za-z_][A-Za-z0-9_]*", body_txt):
             start = max(0, m.start() - 40)
             end   = min(len(body_txt), m.end() + 80)
             candidates.append(body_txt[start:end])
-            
-    
+
     # 5) Fallback: detect class/interface/enum from <h1>
-    if not any(k.startswith(("class:", "interface:", "enum:")) for k in results):
+    if not any(k.startswith(("class:", "interface:", "enum:", "object:")) for k in results):
         header = soup.find("h1")
         if header:
             txt = header.get_text(" ", strip=True)
-            if " class" in txt:
-                name = txt.split()[0]
-                results[f"class:{name}"] = f"class {name}"
-            elif " interface" in txt:
-                name = txt.split()[0]
-                results[f"interface:{name}"] = f"interface {name}"
-            elif " enum" in txt:
-                name = txt.split()[0]
-                results[f"enum:{name}"] = f"enum {name}"
+            for kind, pat in PATTERNS.items():
+                m = pat.search(txt)
+                if m:
+                    name = m.group(2) if kind == "property" else m.group(1)
+                    results[f"{kind}:{name}"] = f"{kind} {name}"
+                    break
 
-
+    # 6) parsing vero con regex robuste
     for raw in candidates:
         sig = normalize_sig(raw)
-
-        # Detect kind
-        if sig.startswith("class "):
-            name = sig.split()[1]
-            kind = "class"
-        elif sig.startswith("interface "):
-            name = sig.split()[1]
-            kind = "interface"
-        elif sig.startswith("enum class "):
-            name = sig.split()[2]
-            kind = "enum"
-        elif sig.startswith("val ") or sig.startswith("var "):
-            name = sig.split()[1].split(":")[0]
-            kind = "property"
-        elif sig.startswith("fun "):
-            name = sig.split()[1].split("(")[0]
-            kind = "function"
-        else:
-            continue  # scarta roba che non riconosciamo
-
+        symbol = extract_symbol_from_sig(sig)
+        if not symbol:
+            continue
+        name, kind = symbol
         key = f"{kind}:{name}"
         if key not in results or len(sig) > len(results[key]):
             results[key] = sig
@@ -128,6 +108,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
             results[f"function:{name}"] = f"fun {name}(…)"  # fallback
 
     return results
+
 
 
 # ---- scansione sito ----
@@ -198,23 +179,25 @@ def write_snapshot(symbols: dict[str, str]):
         encoding="utf-8"
     )
 
-def write_log(rows: list[tuple[str, str]], sha: str, date: str):
+def write_log(rows: list[tuple[str, str]], sha: str, date: str, symbols: dict[str, str]):
     """
-    Scrive il log in formato tabella markdown
+    Scrive il log in formato tabella markdown con anche la firma completa
     """
     with open(LOG, "w", encoding="utf-8") as out:
-        out.write("| Symbol | Kind | Status   | Commit SHA | Date |\n")
-        out.write("|--------|------|----------|------------|------|\n")
+        out.write("| Symbol | Kind | Status   | Commit SHA | Date | Signature |\n")
+        out.write("|--------|------|----------|------------|------|-----------|\n")
         if not rows:
-            out.write(f"| _No changes_ | - | - | {sha} | {date} |\n")
+            out.write(f"| _No changes_ | - | - | {sha} | {date} | - |\n")
         else:
             for key, status in rows:
                 if ":" in key:
                     kind, name = key.split(":", 1)  # es. "function:Hello"
-                    out.write(f"| {name} | {kind} | {status} | {sha} | {date} |\n")
+                    sig = symbols.get(key, "-")
+                    out.write(f"| {name} | {kind} | {status} | {sha} | {date} | `{sig}` |\n")
                 else:
                     # caso speciale: inizializzazione o placeholder
-                    out.write(f"| {key} | - | {status} | {sha} | {date} |\n")
+                    out.write(f"| {key} | - | {status} | {sha} | {date} | - |\n")
+
 
 # ── main ───────────────────────────────────────────────────────────────
 commit_sha  = subprocess.getoutput("git rev-parse HEAD").strip()
@@ -254,7 +237,7 @@ rows += [(s, "new") for s in added]
 rows += [(s, "deleted") for s in removed]
 rows += [(s, "updated") for s in updated]
 
-write_log(rows, commit_sha, commit_date)
+write_log(rows, commit_sha, commit_date, new_symbols)
 write_snapshot(new_symbols)
 
 print("API comparison complete (HTML symbols). See function_change_log.md")
