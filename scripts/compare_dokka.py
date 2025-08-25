@@ -50,7 +50,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
 
     # 3) <span class="symbol"> (tipico di Dokka HTML)
     if not candidates:
-        for span in soup.select("span.symbol, span.signature"):
+        for span in soup.select("span.symbol, div.signature"):
             txt = span.get_text(" ", strip=True)
             if "fun " in txt and "(" in txt:
                 candidates.append(txt)
