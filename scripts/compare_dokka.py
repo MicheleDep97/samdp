@@ -13,37 +13,29 @@ def kebab_to_camel(s: str) -> str:
     return parts[0] + ''.join(p.capitalize() for p in parts[1:]) if parts else s
 
 def normalize_sig(sig: str) -> str:
-    # compatta spazi e rimuove cose non determinanti
     sig = sig.strip()
     sig = re.sub(r"\s+", " ", sig)
-    # taglia dopo la prima riga/brace/equals
     sig = re.split(r"[\n\r{=]", sig, maxsplit=1)[0].strip()
     return sig
 
 def extract_name_from_sig(sig: str) -> str | None:
-    # prova pattern Kotlin
     m = re.search(r"\bfun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", sig)
     if m:
         return m.group(1)
     return None
 
 def load_functions_from_html(html_file: Path) -> dict[str, str]:
-    """
-    Ritorna {nomeFunzione: firmaNormalizzata} per una singola pagina HTML Dokka.
-    """
     try:
         soup = BeautifulSoup(html_file.read_text(encoding="utf-8", errors="ignore"), "html.parser")
     except Exception:
         return {}
 
-    # 1) prova con blocchi <code> (di solito contengono le firme)
     candidates = []
     for code in soup.find_all("code"):
         txt = code.get_text(" ", strip=True)
         if "fun " in txt and "(" in txt:
             candidates.append(txt)
 
-    # 2) fallback: <pre> (alcuni temi mettono la firma qui)
     if not candidates:
         for pre in soup.find_all("pre"):
             txt = pre.get_text(" ", strip=True)
@@ -56,24 +48,17 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         name = extract_name_from_sig(sig)
         if not name:
             continue
-        # tieni la firma più "lunga" (più informativa) in caso di duplicati
         if name not in results or len(sig) > len(results[name]):
             results[name] = sig
 
-    # 3) se non abbiamo trovato firma, prova a dedurre dal filename (kebab -> camel)
     if not results:
-        stem = html_file.stem  # es. new-test-function
+        stem = html_file.stem
         if stem not in {"index"} and not stem.startswith("-"):
             name = kebab_to_camel(stem)
-            # segna firma "sconosciuta" ma coerente
             results[name] = f"fun {name}(…)"
     return results
 
 def gather_functions_from_site() -> dict[str, str]:
-    """
-    Scansiona le pagine HTML della documentazione. Se esiste pages.json usa le location,
-    altrimenti fa glob su tutte le pagine sotto html/app/.
-    """
     html_files: list[Path] = []
     if PAGES_JSON.exists():
         try:
@@ -92,12 +77,10 @@ def gather_functions_from_site() -> dict[str, str]:
     for f in html_files:
         if not f.exists():
             continue
-        # escludi index e pagine di classi (iniziano spesso con '-')
         if f.name == "index.html" or f.name.startswith("-"):
             continue
         extracted = load_functions_from_html(f)
         for name, sig in extracted.items():
-            # tieni la firma più informativa
             if name not in funcs or len(sig) > len(funcs[name]):
                 funcs[name] = sig
     return funcs
@@ -107,11 +90,10 @@ def read_snapshot() -> dict[str, str]:
         return {}
     try:
         data = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
-        # supporta vecchio formato (lista) o nuovo ({functions:{...}})
         if isinstance(data, dict) and "functions" in data and isinstance(data["functions"], dict):
             return {str(k): str(v) for k, v in data["functions"].items()}
         if isinstance(data, list):
-            return {str(k): "" for k in data}  # vecchio snapshot solo nomi
+            return {str(k): "" for k in data}
         return {}
     except Exception:
         return {}
@@ -130,35 +112,30 @@ def write_log(rows: list[tuple[str, str]], sha: str, date: str):
             for f, s in rows:
                 out.write(f"| {f} | {s} | {sha} | {date} |\n")
 
-def placeholder_and_exit(msg: str):
-    LOG.write_text("| Function | Status | Commit SHA | Date |\n|----------|--------|------------|------|\n| _No data_ | - | - | - |\n", encoding="utf-8")
-    if not SNAPSHOT.exists():
-        write_snapshot({})
-    print(f"⚠️ {msg}")
-    sys.exit(0)
-
-# ── main ──────────────────────────────────────────────────────────────────────
+# ── main ───────────────────────────────────────────────────────────────
 commit_sha  = subprocess.getoutput("git rev-parse HEAD").strip()
 commit_date = subprocess.getoutput("git show -s --format=%ci HEAD").strip()
 
-# Assicuriamoci che l'HTML esista (dokkaHtml deve essere stato eseguito)
 if not HTML_ROOT.exists():
-    placeholder_and_exit(f"{HTML_ROOT} not found")
+    print(f"❌ {HTML_ROOT} not found. Did you run dokkaHtml?")
+    sys.exit(1)
 
 new_funcs = gather_functions_from_site()
+print(f"🔎 Parsed {len(new_funcs)} functions from Dokka HTML")
+
 if not new_funcs:
-    placeholder_and_exit("No functions parsed from Dokka HTML")
+    print("❌ No functions parsed from Dokka HTML (maybe all are private/internal?)")
+    sys.exit(1)
 
 old_funcs = read_snapshot()
+print(f"📦 Snapshot contained {len(old_funcs)} functions")
 
-# Prima run → inizializza snapshot e log
 if not old_funcs:
     write_snapshot(new_funcs)
     write_log([("_Initialized_", "-")], commit_sha, commit_date)
     print("ℹ️ Snapshot initialized from Dokka HTML")
     sys.exit(0)
 
-# Diff: new / deleted / updated (firma cambiata)
 added   = sorted(set(new_funcs) - set(old_funcs))
 removed = sorted(set(old_funcs) - set(new_funcs))
 updated = sorted([f for f in set(new_funcs) & set(old_funcs) if new_funcs[f] != old_funcs[f]])
