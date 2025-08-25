@@ -41,7 +41,6 @@ class FooBar {
     val version: Int = 1
 }
 
-
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
     Surface(color = Color.Cyan) {
