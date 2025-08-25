@@ -44,9 +44,6 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun Hello(name: String) {
-   println("Hello, $name")
-}
 
 @Preview
 @Composable
