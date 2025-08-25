@@ -105,7 +105,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         stem = html_file.stem.lstrip('-')
         if stem != "index":
             name = kebab_to_camel(stem)
-            results[f"function:{name}"] = f"fun {name}(…)"  # fallback
+            results[f"unknown:{name}"] = name
 
     return results
 
