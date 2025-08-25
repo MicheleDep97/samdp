@@ -38,6 +38,12 @@ jobs:
          echo "=== pages.json files ==="
          find app/build/dokka -type f -name "pages.json" || echo "No pages.json"
 
+
+      - name: Debug Dokka JSON contents
+        run: |
+         echo "=== Dumping module.json ==="
+         cat app/build/dokka/json/module.json | head -50
+
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
 
