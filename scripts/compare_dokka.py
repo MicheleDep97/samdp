@@ -47,6 +47,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         return {}
 
     candidates: list[str] = []
+    results: dict[str, str] = {}
 
     # 1) <code>
     for code in soup.find_all("code"):
@@ -75,8 +76,24 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
             start = max(0, m.start() - 40)
             end   = min(len(body_txt), m.end() + 80)
             candidates.append(body_txt[start:end])
+            
+    
+    # 5) Fallback: detect class/interface/enum from <h1>
+    if not any(k.startswith(("class:", "interface:", "enum:")) for k in results):
+        header = soup.find("h1")
+        if header:
+            txt = header.get_text(" ", strip=True)
+            if " class" in txt:
+                name = txt.split()[0]
+                results[f"class:{name}"] = f"class {name}"
+            elif " interface" in txt:
+                name = txt.split()[0]
+                results[f"interface:{name}"] = f"interface {name}"
+            elif " enum" in txt:
+                name = txt.split()[0]
+                results[f"enum:{name}"] = f"enum {name}"
 
-    results: dict[str, str] = {}
+
     for raw in candidates:
         sig = normalize_sig(raw)
 
