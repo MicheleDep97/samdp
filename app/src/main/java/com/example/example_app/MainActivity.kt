@@ -44,6 +44,10 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
+fun Hello(name: String) {
+  println("Hello!)
+}
+
 
 @Preview
 @Composable
