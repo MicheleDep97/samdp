@@ -175,9 +175,12 @@ def write_log(rows: list[tuple[str, str]], sha: str, date: str):
             out.write(f"| _No changes_ | - | - | {sha} | {date} |\n")
         else:
             for key, status in rows:
-                kind, name = key.split(":", 1)  # es. "function:Hello"
-                out.write(f"| {name} | {kind} | {status} | {sha} | {date} |\n")
-
+                if ":" in key:
+                    kind, name = key.split(":", 1)  # es. "function:Hello"
+                    out.write(f"| {name} | {kind} | {status} | {sha} | {date} |\n")
+                else:
+                    # caso speciale: inizializzazione o placeholder
+                    out.write(f"| {key} | - | {status} | {sha} | {date} |\n")
 
 # ── main ───────────────────────────────────────────────────────────────
 commit_sha  = subprocess.getoutput("git rev-parse HEAD").strip()
