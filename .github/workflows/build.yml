@@ -2,8 +2,7 @@ name: Track Dev Functions
 
 on:
   push:
-    branches:
-      - dev
+    branches: [ dev ]
   workflow_dispatch:
 
 jobs:
@@ -16,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: dev
-          fetch-depth: 2 
+          fetch-depth: 2
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -33,42 +32,44 @@ jobs:
       - name: Generate Dokka HTML
         run: ./gradlew :app:dokkaHtml
 
+      # (Facoltativo) piccolo debug
       - name: Debug Dokka pages.json
         run: |
-         echo "=== pages.json files ==="
-         find app/build/dokka -type f -name "pages.json" || echo "No pages.json"
+          echo "=== pages.json files ==="
+          find app/build/dokka -type f -name "pages.json" || echo "No pages.json"
 
-
-      - name: Debug Dokka JSON contents
-        run: |
-         echo "=== Dumping module.json ==="
-         cat app/build/dokka/json/module.json | head -50
+      # Ripristina lo snapshot dalla cache (dell'ultimo run di questo branch)
+      - name: Restore API snapshot (cache)
+        uses: actions/cache/restore@v4
+        with:
+          path: docs/json
+          key: dokka-snapshot-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            dokka-snapshot-${{ github.ref_name }}-
 
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
 
-      # Ripristina snapshot JSON dalla run precedente (se esiste)
-      - name: Download previous API snapshot
-        uses: actions/download-artifact@v4
-        with:
-          name: dokka-api-snapshot
-          path: docs/json
-        continue-on-error: true
-
-      # Confronta old.json con nuovo JSON
-      - name: Compare API with Dokka JSON
+      #  Confronto HTML + aggiornamento snapshot
+      - name: Compare API with Dokka HTML
         run: python scripts/compare_dokka.py
 
-      # Salva il nuovo snapshot come artifact per la prossima run
+      #  Artifact solo per consultazione
+      - name: Upload function change log
+        uses: actions/upload-artifact@v4
+        with:
+          name: function-change-log-${{ github.sha }}
+          path: function_change_log.md
+
       - name: Upload new API snapshot
         uses: actions/upload-artifact@v4
         with:
           name: dokka-api-snapshot
           path: docs/json/old.json
 
-      # Salva anche il log dei cambiamenti come artifact
-      - name: Upload function change log
-        uses: actions/upload-artifact@v4
+      #  Salva lo snapshot aggiornato in cache per la prossima run
+      - name: Save API snapshot (cache)
+        uses: actions/cache/save@v4
         with:
-          name: function-change-log-${{ github.sha }}
-          path: function_change_log.md
+          path: docs/json
+          key: dokka-snapshot-${{ github.ref_name }}-${{ github.run_id }}
