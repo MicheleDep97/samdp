@@ -41,29 +41,6 @@ class FooBar {
     val version: Int = 1
 }
 
-class FooBar1 {
-    fun ping1(): String {
-        return "pong"
-    }
-    
-    val version: Int = 1
-}
-
-class Fool{
-    fun ping2(): String {
-        return "pong"
-    }
-    
-    val version: Int = 1
-}
-
-class Fool3{
-    fun ping3(name: String): String {
-        return "pong"
-    }
-    
-    val version321: Int = 1
-}
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
