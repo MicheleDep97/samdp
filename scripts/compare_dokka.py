@@ -239,7 +239,7 @@ print(f"📦 Snapshot contained {len(old_symbols)} symbols")
 # Prima run → inizializza snapshot e log
 if not old_symbols:
     write_snapshot(new_symbols)
-    write_log([("_Initialized_", "-")], commit_sha, commit_date)
+    write_log([("_Initialized_", "-")], commit_sha, commit_date, new_symbols)
     print("Snapshot initialized from Dokka HTML")
     sys.exit(0)
 
