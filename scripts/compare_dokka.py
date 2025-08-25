@@ -118,10 +118,16 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
     if not results:
         stem = html_file.stem.lstrip('-')
         if stem != "index":
-            # NON conosciamo il tipo: evitiamo di etichettare "function"
-            # Proviamo comunque a ricavare il nome in PascalCase (spesso sono tipi)
-            name = kebab_to_pascal(stem)
-            results[f"unknown:{name}"] = name
+            # Evita "unknown:FooBar" su pagine contenitore del tipo:
+            # es: .../-foo-bar/-foo-bar.html (stem == parent kebab)
+            parent_kebab = html_file.parent.name.lstrip('-') if html_file.parent.name.startswith('-') else None
+            if parent_kebab and stem == parent_kebab:
+                # pagina contenitore del tipo → non emettere "unknown"
+                pass
+            else:
+                name = kebab_to_pascal(stem)
+                results[f"unknown:{name}"] = name
+
 
     return results
 
@@ -142,11 +148,10 @@ def gather_symbols_from_site() -> dict[str, str]:
             pass
 
     if not html_files:
-        # fallback: cerca direttamente sotto html/app/
         base = HTML_ROOT / "app"
         html_files = list(base.rglob("*.html")) if base.exists() else list(HTML_ROOT.rglob("*.html"))
 
-    # log di cosa stiamo analizzando
+    # log
     print(f"  HTML files to scan: {len(html_files)} (showing up to 20)")
     for f in html_files[:20]:
         print(f"   - {f.relative_to(HTML_ROOT)}")
@@ -163,10 +168,29 @@ def gather_symbols_from_site() -> dict[str, str]:
         else:
             print(f"   • {f.name}: 0 symbols")
 
-        for name, sig in extracted.items():
-            if name not in symbols or len(sig) > len(symbols[name]):
-                symbols[name] = sig
+        #  MERGE per ogni file (questo blocco deve stare DENTRO il for dei file)
+        for key, sig in extracted.items():
+            # key è del tipo "kind:name"
+            if ":" not in key:
+                if key not in symbols or len(sig) > len(symbols.get(key, "")):
+                    symbols[key] = sig
+                continue
+
+            kind, name = key.split(":", 1)
+
+            if kind == "unknown":
+                # se esiste già un tipo "vero", salta l'unknown
+                if any(f"{t}:{name}" in symbols for t in ("class", "interface", "enum", "object")):
+                    continue
+            else:
+                # se arriva un tipo "vero", rimuovi l'eventuale unknown precedente
+                symbols.pop(f"unknown:{name}", None)
+
+            if key not in symbols or len(sig) > len(symbols.get(key, "")):
+                symbols[key] = sig
+
     return symbols
+
     
 # ---- snapshot io ----
 def read_snapshot() -> dict[str, str]:
