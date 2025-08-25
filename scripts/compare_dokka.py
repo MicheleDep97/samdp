@@ -67,10 +67,10 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         
     # Pagina "tipo": .../-<kebab>/index.html → deduci solo il tipo e ritorna
     if html_file.name == "index.html" and html_file.parent.name.startswith("-"):
-    raw = html_file.parent.name.lstrip('-')      # "-foo-bar" → "foo-bar"
-    name = kebab_to_pascal(raw)                  # → "FooBar"
-    kind = detect_page_kind(soup) or "class"     # tenta di capire il tipo, default "class"
-    return { f"{kind}:{name}": f"{kind} {name}" }
+      raw = html_file.parent.name.lstrip('-')      # "-foo-bar" → "foo-bar"
+      name = kebab_to_pascal(raw)                  # → "FooBar"
+      kind = detect_page_kind(soup) or "class"     # tenta di capire il tipo, default "class"
+      return { f"{kind}:{name}": f"{kind} {name}" }
 
     candidates: list[str] = []
     results: dict[str, str] = {}
