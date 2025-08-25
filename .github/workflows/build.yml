@@ -33,10 +33,11 @@ jobs:
       - name: Generate Dokka HTML
         run: ./gradlew :app:dokkaHtml
 
-      - name: Debug Dokka JSON output
+      - name: Generate Dokka JSON
         run: |
-          echo "=== Contents of app/build/dokka ==="
-          ls -R app/build/dokka || echo "No dokka dir found"
+          ./gradlew :app:dokkaJson --info
+          echo "=== JSON files ==="
+          find app/build/dokka -type f -name "*.json" || echo "No JSON"
 
       - name: Install Python dependencies
         run: pip3 install beautifulsoup4
