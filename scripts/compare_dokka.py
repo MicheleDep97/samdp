@@ -64,6 +64,13 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         soup = BeautifulSoup(html_file.read_text(encoding="utf-8", errors="ignore"), "html.parser")
     except Exception:
         return {}
+        
+    # Pagina "tipo": .../-<kebab>/index.html → deduci solo il tipo e ritorna
+    if html_file.name == "index.html" and html_file.parent.name.startswith("-"):
+    raw = html_file.parent.name.lstrip('-')      # "-foo-bar" → "foo-bar"
+    name = kebab_to_pascal(raw)                  # → "FooBar"
+    kind = detect_page_kind(soup) or "class"     # tenta di capire il tipo, default "class"
+    return { f"{kind}:{name}": f"{kind} {name}" }
 
     candidates: list[str] = []
     results: dict[str, str] = {}
@@ -107,16 +114,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         if key not in results or len(sig) > len(results[key]):
             results[key] = sig
 
-    # 6) Se non abbiamo ancora nulla e questa è una pagina "tipo" della documentazione
-    #    (es: .../-fool2/index.html), deduci la classe dal nome della CARTELLA e dal contenuto
-    if not results:
-        if html_file.name == "index.html" and html_file.parent.name.startswith("-"):
-            raw = html_file.parent.name.lstrip('-')   # es: "-fool2" -> "fool2"
-            name = kebab_to_pascal(raw)               # -> "Fool2" (PascalCase)
-            kind = detect_page_kind(soup) or "class"  # prova a capire il tipo, default class
-            results[f"{kind}:{name}"] = f"{kind} {name}"
-
-    # 7) Ultimissima spiaggia: dal filename, senza forzare function
+    # 6) Ultimissima spiaggia: dal filename, senza forzare function
     if not results:
         stem = html_file.stem.lstrip('-')
         if stem != "index":
