@@ -39,6 +39,25 @@ def extract_symbol_from_sig(sig: str) -> tuple[str, str] | None:
             return m.group(1), kind
     return None
 
+def kebab_to_pascal(s: str) -> str:
+    parts = [p for p in s.split('-') if p]
+    return ''.join(p.capitalize() for p in parts)
+
+def detect_page_kind(soup: BeautifulSoup) -> str | None:
+    # usa titoli/sezioni per capire se la pagina è class/interface/enum/object
+    txt = " ".join(el.get_text(" ", strip=True) for el in soup.select("h1,h2,h3,h4")).lower()
+    # segnali forti
+    if "enum entries" in txt or "enum class" in txt:
+        return "enum"
+    if "interface" in txt:
+        return "interface"
+    if re.search(r"\bobject\b", txt):
+        return "object"
+    # segnali tipici di pagina di tipo (class/object): ha sezioni come Functions/Properties/Constructors
+    if re.search(r"\bconstructors\b", txt) or re.search(r"\bfunctions\b", txt) or re.search(r"\bproperties\b", txt):
+        return "class"
+    return None
+
 # ---- parsing singola pagina ----
 def load_functions_from_html(html_file: Path) -> dict[str, str]:
     try:
@@ -62,14 +81,14 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
             if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
                 candidates.append(txt)
 
-    # 3) Dokka temi recenti (div/span signature)
+    # 3) Dokka temi recenti
     if not candidates:
         for el in soup.select("div.symbol, div.signature, span.signature"):
             txt = el.get_text(" ", strip=True)
             if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
                 candidates.append(txt)
 
-    # 4) fallback: cerca nel testo grezzo (collassato)
+    # 4) fallback grezzo
     if not candidates:
         body_txt = soup.get_text(" ", strip=True)
         for m in re.finditer(r"\b(fun|class|interface|enum class|object|val|var)\s+[A-Za-z_][A-Za-z0-9_]*", body_txt):
@@ -80,7 +99,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
     # 5) parsing vero con regex robuste
     for raw in candidates:
         sig = normalize_sig(raw)
-        symbol = extract_symbol_from_sig(sig)  # usa PATTERNS
+        symbol = extract_symbol_from_sig(sig)  # usa PATTERNS esistenti
         if not symbol:
             continue
         name, kind = symbol
@@ -88,36 +107,22 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         if key not in results or len(sig) > len(results[key]):
             results[key] = sig
 
-    # 6) Se ancora vuoto, prova a dedurre dal titolo + sezioni
+    # 6) Se non abbiamo ancora nulla e questa è una pagina "tipo" della documentazione
+    #    (es: .../-fool2/index.html), deduci la classe dal nome della CARTELLA e dal contenuto
     if not results:
-        title = soup.find("h1")
-        title_text = title.get_text(" ", strip=True) if title else ""
-        # prova a estrarre un identificatore dal titolo (es. "Fool2")
-        m_name = re.search(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", title_text)
-        title_name = m_name.group(1) if m_name else None
+        if html_file.name == "index.html" and html_file.parent.name.startswith("-"):
+            raw = html_file.parent.name.lstrip('-')   # es: "-fool2" -> "fool2"
+            name = kebab_to_pascal(raw)               # -> "Fool2" (PascalCase)
+            kind = detect_page_kind(soup) or "class"  # prova a capire il tipo, default class
+            results[f"{kind}:{name}"] = f"{kind} {name}"
 
-        # guarda i sottotitoli per indizi tipici delle classi/enum/object
-        section_text = " ".join(h.get_text(" ", strip=True) for h in soup.find_all(re.compile(r"^h[2-4]$")))
-        if title_name:
-            if re.search(r"\bEnum entries\b", section_text, flags=re.I):
-                results[f"enum:{title_name}"] = f"enum {title_name}"
-            elif re.search(r"\bConstructors\b", section_text, flags=re.I):
-                results[f"class:{title_name}"] = f"class {title_name}"
-            elif re.search(r"\b(Functions|Properties|Companion)\b", section_text, flags=re.I):
-                # molto probabilmente è una classe/object con sezioni tipiche
-                results[f"class:{title_name}"] = f"class {title_name}"
-            elif re.search(r"\bObject\b", title_text, flags=re.I):
-                results[f"object:{title_name}"] = f"object {title_name}"
-            elif re.search(r"\bInterface\b", title_text, flags=re.I):
-                results[f"interface:{title_name}"] = f"interface {title_name}"
-            elif re.search(r"\bClass\b", title_text, flags=re.I):
-                results[f"class:{title_name}"] = f"class {title_name}"
-
-    # 7) Ultimissima spiaggia: dal filename, senza forzare "function"
+    # 7) Ultimissima spiaggia: dal filename, senza forzare function
     if not results:
         stem = html_file.stem.lstrip('-')
         if stem != "index":
-            name = kebab_to_camel(stem)
+            # NON conosciamo il tipo: evitiamo di etichettare "function"
+            # Proviamo comunque a ricavare il nome in PascalCase (spesso sono tipi)
+            name = kebab_to_pascal(stem)
             results[f"unknown:{name}"] = name
 
     return results
@@ -151,8 +156,6 @@ def gather_symbols_from_site() -> dict[str, str]:
     symbols: dict[str, str] = {}
     for f in html_files:
         if not f.exists():
-            continue
-        if f.name == "index.html":
             continue
 
         extracted = load_functions_from_html(f)
