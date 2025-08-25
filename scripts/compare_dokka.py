@@ -25,20 +25,33 @@ def extract_name_from_sig(sig: str) -> str | None:
     return None
 
 def load_functions_from_html(html_file: Path) -> dict[str, str]:
+    """
+    Ritorna {nomeFunzione: firmaNormalizzata} per una singola pagina HTML Dokka.
+    """
     try:
         soup = BeautifulSoup(html_file.read_text(encoding="utf-8", errors="ignore"), "html.parser")
     except Exception:
         return {}
 
     candidates = []
+
+    # 1) <code> (già presente)
     for code in soup.find_all("code"):
         txt = code.get_text(" ", strip=True)
         if "fun " in txt and "(" in txt:
             candidates.append(txt)
 
+    # 2) <pre> (già presente)
     if not candidates:
         for pre in soup.find_all("pre"):
             txt = pre.get_text(" ", strip=True)
+            if "fun " in txt and "(" in txt:
+                candidates.append(txt)
+
+    # 3) <span class="symbol"> (tipico di Dokka HTML)
+    if not candidates:
+        for span in soup.select("span.symbol, span.signature"):
+            txt = span.get_text(" ", strip=True)
             if "fun " in txt and "(" in txt:
                 candidates.append(txt)
 
@@ -51,6 +64,7 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         if name not in results or len(sig) > len(results[name]):
             results[name] = sig
 
+    # 4) fallback: dal filename (kebab → camel)
     if not results:
         stem = html_file.stem
         if stem not in {"index"} and not stem.startswith("-"):
