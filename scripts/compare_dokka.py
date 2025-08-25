@@ -75,8 +75,8 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
 
     # 5) se ancora niente, deduci dal filename (kebab -> camel)
     if not results:
-        stem = html_file.stem
-        if stem not in {"index"} and not stem.startswith("-"):
+        stem = html_file.stem.lstrip('-')  # ⬅️ rimuove il prefisso "-"
+        if stem != "index":
             name = kebab_to_camel(stem)
             results[name] = f"fun {name}(…)"
     return results
@@ -109,7 +109,7 @@ def gather_functions_from_site() -> dict[str, str]:
     for f in html_files:
         if not f.exists():
             continue
-        if f.name == "index.html" or f.name.startswith("-"):
+        if f.name == "index.html":
             continue
 
         extracted = load_functions_from_html(f)
