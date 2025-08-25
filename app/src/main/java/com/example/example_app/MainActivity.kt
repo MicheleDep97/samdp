@@ -57,8 +57,8 @@ class Fool{
     val version: Int = 1
 }
 
-class Fool2{
-    fun ping22(name: String): String {
+class Fool3{
+    fun ping3(name: String): String {
         return "pong"
     }
     
