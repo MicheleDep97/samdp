@@ -20,11 +20,24 @@ def normalize_sig(sig: str) -> str:
     return sig
 
 # Supporta sia fun normali che extension functions (fun Receiver.name(...))
-NAME_RE = re.compile(r"\bfun\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+PATTERNS = {
+    "function": re.compile(r"\bfun\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\("),
+    "class": re.compile(r"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)"),
+    "interface": re.compile(r"\binterface\s+([A-Za-z_][A-Za-z0-9_]*)"),
+    "object": re.compile(r"\bobject\s+([A-Za-z_][A-Za-z0-9_]*)"),
+    "enum": re.compile(r"\benum\s+class\s+([A-Za-z_][A-Za-z0-9_]*)"),
+    "property": re.compile(r"\b(val|var)\s+([A-Za-z_][A-Za-z0-9_]*)"),
+    "typealias": re.compile(r"\btypealias\s+([A-Za-z_][A-Za-z0-9_]*)"),
+}
 
-def extract_name_from_sig(sig: str) -> str | None:
-    m = NAME_RE.search(sig)
-    return m.group(1) if m else None
+def extract_symbol_from_sig(sig: str) -> tuple[str, str] | None:
+    for kind, pat in PATTERNS.items():
+        m = pat.search(sig)
+        if m:
+            if kind == "property":
+                return m.group(2), kind
+            return m.group(1), kind
+    return None
 
 # ---- parsing singola pagina ----
 def load_functions_from_html(html_file: Path) -> dict[str, str]:
@@ -66,23 +79,25 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
 
     results: dict[str, str] = {}
     for raw in candidates:
-        sig  = normalize_sig(raw)
-        name = extract_name_from_sig(sig)
-        if not name:
+        sig = normalize_sig(raw)
+        parsed = extract_symbol_from_sig(sig)
+        if not parsed:
             continue
-        if name not in results or len(sig) > len(results[name]):
-            results[name] = sig
-
-    # 5) se ancora niente, deduci dal filename (kebab -> camel)
+        name, kind = parsed
+        key = f"{kind}:{name}"
+        if key not in results or len(sig) > len(results[key]):
+            results[key] = sig
+    
+    # fallback: dal filename se non abbiamo trovato niente
     if not results:
-        stem = html_file.stem.lstrip('-')  # ⬅️ rimuove il prefisso "-"
+        stem = html_file.stem.lstrip('-')
         if stem != "index":
             name = kebab_to_camel(stem)
-            results[name] = f"fun {name}(…)"
+            results[f"function:{name}"] = f"fun {name}(…)"  # fallback
     return results
 
 # ---- scansione sito ----
-def gather_functions_from_site() -> dict[str, str]:
+def gather_symbols_from_site() -> dict[str, str]:
     html_files: list[Path] = []
 
     if PAGES_JSON.exists():
@@ -105,7 +120,7 @@ def gather_functions_from_site() -> dict[str, str]:
     for f in html_files[:20]:
         print(f"   - {f.relative_to(HTML_ROOT)}")
 
-    funcs: dict[str, str] = {}
+    symbols: dict[str, str] = {}
     for f in html_files:
         if not f.exists():
             continue
@@ -115,44 +130,54 @@ def gather_functions_from_site() -> dict[str, str]:
         extracted = load_functions_from_html(f)
 
         if extracted:
-            print(f"   ✓ {f.name}: found {len(extracted)} function(s)")
+            print(f"   ✓ {f.name}: found {len(extracted)} symbol(s)")
         else:
-            # commenta se troppo rumoroso
-            print(f"   • {f.name}: 0 functions")
+            print(f"   • {f.name}: 0 symbols")
 
         for name, sig in extracted.items():
-            if name not in funcs or len(sig) > len(funcs[name]):
-                funcs[name] = sig
-    return funcs
-
+            if name not in symbols or len(sig) > len(symbols[name]):
+                symbols[name] = sig
+    return symbols
+    
 # ---- snapshot io ----
 def read_snapshot() -> dict[str, str]:
+    """
+    Ritorna il contenuto dello snapshot precedente come dict { "kind:name": "signature" }
+    """
     if not SNAPSHOT.exists():
         return {}
     try:
         data = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and "functions" in data and isinstance(data["functions"], dict):
-            return {str(k): str(v) for k, v in data["functions"].items()}
-        if isinstance(data, list):
-            return {str(k): "" for k in data}
+        if isinstance(data, dict) and "symbols" in data and isinstance(data["symbols"], dict):
+            return {str(k): str(v) for k, v in data["symbols"].items()}
         return {}
     except Exception:
         return {}
 
-def write_snapshot(funcs: dict[str, str]):
+def write_snapshot(symbols: dict[str, str]):
+    """
+    Scrive il nuovo snapshot nel file old.json
+    """
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT.write_text(json.dumps({"functions": dict(sorted(funcs.items()))}, ensure_ascii=False, indent=2),
-                        encoding="utf-8")
+    SNAPSHOT.write_text(
+        json.dumps({"symbols": dict(sorted(symbols.items()))}, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
 def write_log(rows: list[tuple[str, str]], sha: str, date: str):
+    """
+    Scrive il log in formato tabella markdown
+    """
     with open(LOG, "w", encoding="utf-8") as out:
-        out.write("| Function | Status   | Commit SHA | Date |\n")
-        out.write("|----------|----------|------------|------|\n")
+        out.write("| Symbol | Kind | Status   | Commit SHA | Date |\n")
+        out.write("|--------|------|----------|------------|------|\n")
         if not rows:
-            out.write(f"| _No changes_ | - | {sha} | {date} |\n")
+            out.write(f"| _No changes_ | - | - | {sha} | {date} |\n")
         else:
-            for f, s in rows:
-                out.write(f"| {f} | {s} | {sha} | {date} |\n")
+            for key, status in rows:
+                kind, name = key.split(":", 1)  # es. "function:Hello"
+                out.write(f"| {name} | {kind} | {status} | {sha} | {date} |\n")
+
 
 # ── main ───────────────────────────────────────────────────────────────
 commit_sha  = subprocess.getoutput("git rev-parse HEAD").strip()
@@ -162,32 +187,37 @@ if not HTML_ROOT.exists():
     print(f" {HTML_ROOT} not found. Did you run dokkaHtml?")
     sys.exit(1)
 
-new_funcs = gather_functions_from_site()
-print(f"🔎 Parsed {len(new_funcs)} functions from Dokka HTML")
+# Qui gather_symbols_from_site deve restituire { "kind:name": "signature" }
+# Es: { "function:Hello": "fun Hello(name: String)", "class:MainActivity": "class MainActivity : ComponentActivity" }
 
-if not new_funcs:
-    print(" No functions parsed from Dokka HTML (maybe all are private/internal?)")
+new_symbols = gather_symbols_from_site()
+print(f"🔎 Parsed {len(new_symbols)} symbols from Dokka HTML")
+
+if not new_symbols:
+    print("No symbols parsed from Dokka HTML (maybe all are private/internal?)")
     sys.exit(1)
 
-old_funcs = read_snapshot()
-print(f"📦 Snapshot contained {len(old_funcs)} functions")
+old_symbols = read_snapshot()
+print(f"📦 Snapshot contained {len(old_symbols)} symbols")
 
-if not old_funcs:
-    write_snapshot(new_funcs)
+# Prima run → inizializza snapshot e log
+if not old_symbols:
+    write_snapshot(new_symbols)
     write_log([("_Initialized_", "-")], commit_sha, commit_date)
-    print(" Snapshot initialized from Dokka HTML")
+    print("Snapshot initialized from Dokka HTML")
     sys.exit(0)
 
-added   = sorted(set(new_funcs) - set(old_funcs))
-removed = sorted(set(old_funcs) - set(new_funcs))
-updated = sorted([f for f in set(new_funcs) & set(old_funcs) if new_funcs[f] != old_funcs[f]])
+# Diff tra vecchio e nuovo
+added   = sorted(set(new_symbols) - set(old_symbols))
+removed = sorted(set(old_symbols) - set(new_symbols))
+updated = sorted([s for s in set(new_symbols) & set(old_symbols) if new_symbols[s] != old_symbols[s]])
 
 rows: list[tuple[str, str]] = []
-rows += [(f, "new") for f in added]
-rows += [(f, "deleted") for f in removed]
-rows += [(f, "updated") for f in updated]
+rows += [(s, "new") for s in added]
+rows += [(s, "deleted") for s in removed]
+rows += [(s, "updated") for s in updated]
 
 write_log(rows, commit_sha, commit_date)
-write_snapshot(new_funcs)
+write_snapshot(new_symbols)
 
-print(" API comparison complete (HTML signatures). See function_change_log.md")
+print("API comparison complete (HTML symbols). See function_change_log.md")
