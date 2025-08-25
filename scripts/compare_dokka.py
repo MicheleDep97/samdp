@@ -62,14 +62,14 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
             if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
                 candidates.append(txt)
 
-    # 3) Dokka temi recenti
+    # 3) Dokka temi recenti (div/span signature)
     if not candidates:
         for el in soup.select("div.symbol, div.signature, span.signature"):
             txt = el.get_text(" ", strip=True)
             if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ", "object ")):
                 candidates.append(txt)
 
-    # 4) fallback grezzo
+    # 4) fallback: cerca nel testo grezzo (collassato)
     if not candidates:
         body_txt = soup.get_text(" ", strip=True)
         for m in re.finditer(r"\b(fun|class|interface|enum class|object|val|var)\s+[A-Za-z_][A-Za-z0-9_]*", body_txt):
@@ -77,22 +77,10 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
             end   = min(len(body_txt), m.end() + 80)
             candidates.append(body_txt[start:end])
 
-    # 5) Fallback: detect class/interface/enum from <h1>
-    if not any(k.startswith(("class:", "interface:", "enum:", "object:")) for k in results):
-        header = soup.find("h1")
-        if header:
-            txt = header.get_text(" ", strip=True)
-            for kind, pat in PATTERNS.items():
-                m = pat.search(txt)
-                if m:
-                    name = m.group(2) if kind == "property" else m.group(1)
-                    results[f"{kind}:{name}"] = f"{kind} {name}"
-                    break
-
-    # 6) parsing vero con regex robuste
+    # 5) parsing vero con regex robuste
     for raw in candidates:
         sig = normalize_sig(raw)
-        symbol = extract_symbol_from_sig(sig)
+        symbol = extract_symbol_from_sig(sig)  # usa PATTERNS
         if not symbol:
             continue
         name, kind = symbol
@@ -100,7 +88,32 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
         if key not in results or len(sig) > len(results[key]):
             results[key] = sig
 
-    # fallback: dal filename se non abbiamo trovato niente
+    # 6) Se ancora vuoto, prova a dedurre dal titolo + sezioni
+    if not results:
+        title = soup.find("h1")
+        title_text = title.get_text(" ", strip=True) if title else ""
+        # prova a estrarre un identificatore dal titolo (es. "Fool2")
+        m_name = re.search(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", title_text)
+        title_name = m_name.group(1) if m_name else None
+
+        # guarda i sottotitoli per indizi tipici delle classi/enum/object
+        section_text = " ".join(h.get_text(" ", strip=True) for h in soup.find_all(re.compile(r"^h[2-4]$")))
+        if title_name:
+            if re.search(r"\bEnum entries\b", section_text, flags=re.I):
+                results[f"enum:{title_name}"] = f"enum {title_name}"
+            elif re.search(r"\bConstructors\b", section_text, flags=re.I):
+                results[f"class:{title_name}"] = f"class {title_name}"
+            elif re.search(r"\b(Functions|Properties|Companion)\b", section_text, flags=re.I):
+                # molto probabilmente è una classe/object con sezioni tipiche
+                results[f"class:{title_name}"] = f"class {title_name}"
+            elif re.search(r"\bObject\b", title_text, flags=re.I):
+                results[f"object:{title_name}"] = f"object {title_name}"
+            elif re.search(r"\bInterface\b", title_text, flags=re.I):
+                results[f"interface:{title_name}"] = f"interface {title_name}"
+            elif re.search(r"\bClass\b", title_text, flags=re.I):
+                results[f"class:{title_name}"] = f"class {title_name}"
+
+    # 7) Ultimissima spiaggia: dal filename, senza forzare "function"
     if not results:
         stem = html_file.stem.lstrip('-')
         if stem != "index":
