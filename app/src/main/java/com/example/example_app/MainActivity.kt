@@ -57,6 +57,13 @@ class Fool{
     val version: Int = 1
 }
 
+class Fool2{
+    fun ping22(name: String): String {
+        return "pong"
+    }
+    
+    val version321: Int = 1
+}
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
