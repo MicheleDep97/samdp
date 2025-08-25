@@ -7,13 +7,13 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.10"
 }
 
-tasks.register<DokkaTask>("dokkaJson") {
+tasks.register<org.jetbrains.dokka.gradle.DokkaTask>("dokkaJson") {
     outputDirectory.set(layout.buildDirectory.dir("dokka/json"))
-
-    // Qui usiamo una stringa JSON invece di una mappa Kotlin
-    pluginsMapConfiguration.put(
-        "org.jetbrains.dokka.json.JsonFormatPlugin",
-        "{}"
+    // abilita il renderer JSON passando una mappa String->String
+    pluginsMapConfiguration.set(
+        mapOf(
+            "org.jetbrains.dokka.json.JsonFormatPlugin" to "{}"
+        )
     )
 }
 
