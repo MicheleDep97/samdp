@@ -51,28 +51,27 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
     # 1) <code>
     for code in soup.find_all("code"):
         txt = code.get_text(" ", strip=True)
-        if "fun " in txt and "(" in txt:
+        if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ")):
             candidates.append(txt)
 
     # 2) <pre>
     if not candidates:
         for pre in soup.find_all("pre"):
             txt = pre.get_text(" ", strip=True)
-            if "fun " in txt and "(" in txt:
+            if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ")):
                 candidates.append(txt)
 
     # 3) Dokka temi recenti: <div class="symbol">, <div class="signature">, <span class="signature">
     if not candidates:
         for el in soup.select("div.symbol, div.signature, span.signature"):
             txt = el.get_text(" ", strip=True)
-            if "fun " in txt and "(" in txt:
+            if any(x in txt for x in ("fun ", "class ", "interface ", "enum class ", "val ", "var ")):
                 candidates.append(txt)
 
-    # 4) fallback grezzo: ultima spiaggia, cerca "fun xxx(" in tutto il body
+    # 4) fallback grezzo: ultima spiaggia
     if not candidates:
         body_txt = soup.get_text(" ", strip=True)
-        for m in re.finditer(r"\bfun\s+[A-Za-z_][A-Za-z0-9_.]*\s*\(", body_txt):
-            # prendi una finestra di testo attorno alla firma per normalizzarla un minimo
+        for m in re.finditer(r"\b(fun|class|interface|enum class|val|var)\s+[A-Za-z_][A-Za-z0-9_]*", body_txt):
             start = max(0, m.start() - 40)
             end   = min(len(body_txt), m.end() + 80)
             candidates.append(body_txt[start:end])
@@ -80,21 +79,39 @@ def load_functions_from_html(html_file: Path) -> dict[str, str]:
     results: dict[str, str] = {}
     for raw in candidates:
         sig = normalize_sig(raw)
-        parsed = extract_symbol_from_sig(sig)
-        if not parsed:
-            continue
-        name, kind = parsed
+
+        # Detect kind
+        if sig.startswith("class "):
+            name = sig.split()[1]
+            kind = "class"
+        elif sig.startswith("interface "):
+            name = sig.split()[1]
+            kind = "interface"
+        elif sig.startswith("enum class "):
+            name = sig.split()[2]
+            kind = "enum"
+        elif sig.startswith("val ") or sig.startswith("var "):
+            name = sig.split()[1].split(":")[0]
+            kind = "property"
+        elif sig.startswith("fun "):
+            name = sig.split()[1].split("(")[0]
+            kind = "function"
+        else:
+            continue  # scarta roba che non riconosciamo
+
         key = f"{kind}:{name}"
         if key not in results or len(sig) > len(results[key]):
             results[key] = sig
-    
+
     # fallback: dal filename se non abbiamo trovato niente
     if not results:
         stem = html_file.stem.lstrip('-')
         if stem != "index":
             name = kebab_to_camel(stem)
             results[f"function:{name}"] = f"fun {name}(…)"  # fallback
+
     return results
+
 
 # ---- scansione sito ----
 def gather_symbols_from_site() -> dict[str, str]:
