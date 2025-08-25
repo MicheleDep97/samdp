@@ -33,6 +33,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+class FooBar {
+    fun ping(): String {
+        return "pong"
+    }
+}
+
+class FooBar {
+    val version: Int = 1
+}
+
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
