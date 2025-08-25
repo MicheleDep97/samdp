@@ -41,6 +41,14 @@ class FooBar {
     val version: Int = 1
 }
 
+class FooBar1 {
+    fun ping1(): String {
+        return "pong"
+    }
+    
+    val version: Int = 1
+}
+
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
     Surface(color = Color.Cyan) {
