@@ -35,10 +35,19 @@ class MainActivity : ComponentActivity() {
 
 class FooBar {
     fun ping(): String {
-        return "pong"
+        return "changed" // I've modified this line!
     }
     
     val version: Int = 1
+}
+
+
+class FooBar2_new {
+    fun ping2(): String {
+        return "pong"
+    }
+    
+    val version2: Int = 1
 }
 
 
