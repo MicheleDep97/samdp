@@ -57,7 +57,7 @@ fun Hello_changed(name: String) {
 }
 
 fun Hello_new(name: String) {
-  println("Hello new fun!")
+  println("Now I changed this too!")
 }
 
 
