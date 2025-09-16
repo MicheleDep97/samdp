@@ -52,8 +52,12 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun Hello(name: String) {
-  println("Hello!")
+fun Hello_changed(name: String) {
+  println("Hello has been changed!")
+}
+
+fun Hello_new(name: String) {
+  println("Hello new fun!")
 }
 
 
