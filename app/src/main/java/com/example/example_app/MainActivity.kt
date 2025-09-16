@@ -52,7 +52,11 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun Hello_changed(name: String) {
+fun Hello_changed_2(name: String) {
+  println("Hello has been changed!")
+}
+
+fun Hello_new_2(name: String) {
   println("Hello has been changed!")
 }
 
